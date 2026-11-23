@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Article — Hao Zhang</title>
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap"
+    rel="stylesheet"
+  />
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("hz-theme");
+        var prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.setAttribute("data-theme", saved || (prefersDark ? "dark" : "light"));
+      } catch (e) {}
+    })();
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="container nav-inner">
+      <a class="brand" href="./index.html">
+        <span>Hao Zhang</span>
+        <span class="brand-handle">@haozzzdev</span>
+      </a>
+      <div class="nav-controls">
+        <button id="theme-toggle" type="button" class="control-btn control-btn--icon" aria-label="Switch color theme"></button>
+      </div>
+    </div>
+  </header>
+
+  <main class="article-shell">
+    <div class="container container--narrow">
+      <div class="article-back">
+        <a class="inline-link" href="./index.html#writing">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12.5 8h-9" />
+            <path d="M7.5 3.5L3 8l4.5 4.5" />
+          </svg>
+          <span>Back to all articles</span>
+        </a>
+      </div>
+
+      <article id="article-root">
+        <header class="article-header">
+          <div id="article-meta" class="article-meta"></div>
+          <h1 id="article-title" class="article-title">Loading…</h1>
+          <ul id="article-tags" class="tag-list"></ul>
+        </header>
+        <div id="article-body" class="prose"></div>
+      </article>
+    </div>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container container--narrow footer-inner">
+      <span>© 2026 Hao Zhang</span>
+      <div class="footer-links">
+        <a href="./index.html">Home</a>
+        <a href="https://github.com/haozzzdev" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="https://www.linkedin.com/in/haozhang0128/" target="_blank" rel="noopener noreferrer">LinkedIn</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./data.js"></script>
+  <script>
+    (function () {
+      "use strict";
+
+      function esc(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }
+
+      function safeHref(url) {
+        var trimmed = url.trim();
+        if (/^(https?:\/\/|\/|\.\/|#)/i.test(trimmed)) return trimmed;
+        return "#";
+      }
+
+      function formatInline(text) {
+        var out = esc(text);
+        out = out.replace(/`([^`]+)`/g, "<code>$1</code>");
+        out = out.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+        out = out.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+        out = out.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function (_, label, url) {
+          var href = safeHref(url);
+          var ext = /^https?:\/\//i.test(href) ? ' target="_blank" rel="noopener noreferrer"' : "";
+          return '<a href="' + esc(href) + '"' + ext + ">" + label + "</a>";
+        });
+        return out;
+      }
+
+      function renderMarkdown(md) {
+        var lines = md.replace(/\r\n/g, "\n").split("\n");
+        var html = [];
+        var inCode = false;
+        var codeBuf = [];
+        var inList = null;
+
+        function closeList() {
+          if (inList) {
+            html.push(inList === "ul" ? "</ul>" : "</ol>");
+            inList = null;
+          }
+        }
+
+        for (var i = 0; i < lines.length; i++) {
+          var line = lines[i];
+
+          if (line.trim().startsWith("```")) {
+            closeList();
+            if (!inCode) {
+              inCode = true;
+              codeBuf = [];
+            } else {
+              html.push("<pre><code>" + esc(codeBuf.join("\n")) + "</code></pre>");
+              inCode = false;
+            }
+            continue;
+          }
+
+          if (inCode) {
+            codeBuf.push(line);
+            continue;
+          }
+
+          if (!line.trim()) {
+            closeList();
+            continue;
+          }
+
+          if (/^---+$/.test(line.trim())) {
+            closeList();
+            html.push("<hr />");
+            continue;
+          }
+
+          var hMatch = line.match(/^(#{1,3})\s+(.+)$/);
+          if (hMatch) {
+            closeList();
+            var level = hMatch[1].length;
+            if (level === 1 && i < 3) continue; // H1 title rendered in header
+            html.push("<h" + Math.max(2, level) + ">" + formatInline(hMatch[2]) + "</h" + Math.max(2, level) + ">");
+            continue;
+          }
+
+          if (line.startsWith("> ")) {
+            closeList();
+            html.push("<blockquote><p>" + formatInline(line.slice(2)) + "</p></blockquote>");
+            continue;
+          }
+
+          var ulMatch = line.match(/^[-*]\s+(.+)$/);
+          if (ulMatch) {
+            if (inList !== "ul") {
+              closeList();
+              inList = "ul";
+              html.push("<ul>");
+            }
+            html.push("<li>" + formatInline(ulMatch[1]) + "</li>");
+            continue;
+          }
+
+          var olMatch = line.match(/^\d+\.\s+(.+)$/);
+          if (olMatch) {
+            if (inList !== "ol") {
+              closeList();
+              inList = "ol";
+              html.push("<ol>");
+            }
+            html.push("<li>" + formatInline(olMatch[1]) + "</li>");
+            continue;
+          }
+
+          closeList();
+          html.push("<p>" + formatInline(line) + "</p>");
+        }
+
+        closeList();
+        return html.join("\n");
+      }
+
+      // Theme toggle
+      function setTheme(theme) {
+        document.documentElement.setAttribute("data-theme", theme);
+        try { localStorage.setItem("hz-theme", theme); } catch (_) {}
+        var btn = document.getElementById("theme-toggle");
+        if (!btn) return;
+        btn.innerHTML = theme === "dark"
+          ? '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2.5v2.2M12 19.3v2.2M4.93 4.93l1.55 1.55M17.52 17.52l1.55 1.55M2.5 12h2.2M19.3 12h2.2M4.93 19.07l1.55-1.55M17.52 6.48l1.55-1.55"/></svg>'
+          : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a7.5 7.5 0 1 0 11 11Z"/></svg>';
+      }
+
+      var curTheme = document.documentElement.getAttribute("data-theme") || "light";
+      setTheme(curTheme);
+      document.getElementById("theme-toggle").addEventListener("click", function () {
+        curTheme = curTheme === "dark" ? "light" : "dark";
+        setTheme(curTheme);
+      });
+
+      // Load Markdown article by slug
+      var params = new URLSearchParams(window.location.search);
+      var slug = params.get("slug") || "";
+      var titleEl = document.getElementById("article-title");
+      var metaEl = document.getElementById("article-meta");
+      var tagsEl = document.getElementById("article-tags");
+      var bodyEl = document.getElementById("article-body");
+
+      if (!/^[a-z0-9_-]+$/i.test(slug)) {
+        titleEl.textContent = "Article not found";
+        bodyEl.innerHTML = '<p>Return to the <a href="./index.html#writing">homepage</a> to browse available writing.</p>';
+        return;
+      }
+
+      var lang = "en";
+      try {
+        var savedLang = localStorage.getItem("hz-lang");
+        if (savedLang === "zh" || savedLang === "en") lang = savedLang;
+      } catch (_) {}
+
+      var posts = (window.SITE_DATA && window.SITE_DATA.copy[lang] && window.SITE_DATA.copy[lang].writing.posts) || [];
+      var postMeta = posts.find(function (p) { return p.slug === slug; });
+      if (postMeta) {
+        document.title = postMeta.title + " — Hao Zhang";
+        titleEl.textContent = postMeta.title;
+        metaEl.innerHTML = "<span>" + esc(postMeta.date) + "</span>" + (postMeta.readTime ? "<span>·</span><span>" + esc(postMeta.readTime) + "</span>" : "");
+        tagsEl.innerHTML = (postMeta.tags || []).map(function (t) { return '<li class="tag">' + esc(t) + "</li>"; }).join("");
+      }
+
+      fetch("./posts/" + encodeURIComponent(slug) + ".md")
+        .then(function (res) {
+          if (!res.ok) throw new Error("Not found");
+          return res.text();
+        })
+        .then(function (md) {
+          if (!postMeta) {
+            var h1 = md.match(/^#\s+(.+)$/m);
+            titleEl.textContent = h1 ? h1[1] : slug;
+            document.title = titleEl.textContent + " — Hao Zhang";
+          }
+          bodyEl.innerHTML = renderMarkdown(md);
+        })
+        .catch(function () {
+          titleEl.textContent = "Article not found";
+          bodyEl.innerHTML = '<p>Could not load <code>posts/' + esc(slug) + '.md</code>. Return to the <a href="./index.html#writing">homepage</a>.</p>';
+        });
+    })();
+  </script>
+</body>
+</html>
